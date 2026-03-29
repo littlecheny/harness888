@@ -15,6 +15,8 @@
 
 **Agent Team & Skill Architect** — Claude Code 플러그인
 
+[English](README.md) | **한국어** | [日本語](README_JA.md)
+
 도메인/프로젝트에 맞는 하네스를 구성하고, 전문 에이전트를 정의하며, 에이전트가 사용할 스킬을 생성하는 메타 스킬.
 
 ## 개요

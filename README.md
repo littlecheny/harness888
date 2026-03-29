@@ -15,7 +15,7 @@
 
 **Agent Team & Skill Architect** — A Claude Code Plugin
 
-[한국어](README_KO.md)
+**English** | [한국어](README_KO.md) | [日本語](README_JA.md)
 
 A meta-skill that designs domain-specific agent teams, defines specialized agents, and generates the skills they use.
 
