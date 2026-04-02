@@ -142,7 +142,7 @@ ALWAYS use pdfplumber for table extraction. NEVER use PyPDF2 for tables.
 
 ```
 bigquery-skill/
-├── skill.md (개요 + 도메인 선택 가이드)
+├── SKILL.md (개요 + 도메인 선택 가이드)
 └── references/
     ├── finance.md (매출, 빌링 메트릭)
     ├── sales.md (기회, 파이프라인)

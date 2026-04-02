@@ -131,9 +131,9 @@ Claude Code에서 다음과 같이 트리거한다:
 │   │   └── qa.md
 │   └── skills/          # 스킬 파일
 │       ├── analyze/
-│       │   └── skill.md
+│       │   └── SKILL.md
 │       └── build/
-│           ├── skill.md
+│           ├── SKILL.md
 │           └── references/
 ```
 
