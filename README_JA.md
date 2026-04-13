@@ -21,7 +21,7 @@
 
 ## 概要
 
-Harnessは、Claude Codeのエージェントチームシステムを活用し、複雑なタスクを専門エージェントチームに分解・統制するアーキテクチャツールです。「ハーネスを構成して」と伝えるだけで、ドメインに適したエージェント定義（`.claude/agents/`）とスキル（`.claude/skills/`）を自動生成します。
+Harnessは、Claude Codeのエージェントチームシステムを活用し、複雑なタスクを専門エージェントチームに分解・統制するアーキテクチャツールです。「ハーネスを構成して」と伝えるだけで、ドメインに適したエージェント定義（`.trae/agents/`）とスキル（`.trae/skills/`）を自動生成します。
 
 ## 主な機能
 
@@ -37,9 +37,9 @@ Phase 1: ドメイン分析
     ↓
 Phase 2: チームアーキテクチャ設計（Agent Teams vs サブエージェント）
     ↓
-Phase 3: エージェント定義の生成（.claude/agents/）
+Phase 3: エージェント定義の生成（.trae/agents/）
     ↓
-Phase 4: スキル生成（.claude/skills/）
+Phase 4: スキル生成（.trae/skills/）
     ↓
 Phase 5: 統合とオーケストレーション
     ↓
@@ -63,15 +63,15 @@ Phase 6: 検証とテスト
 ### グローバルスキルとして直接インストール
 
 ```shell
-# skillsディレクトリを ~/.claude/skills/harness/ にコピー
-cp -r skills/harness ~/.claude/skills/harness
+# skillsディレクトリを ~/.trae/skills/harness/ にコピー
+cp -r skills/harness ~/.trae/skills/harness
 ```
 
 ## プラグイン構成
 
 ```
 harness/
-├── .claude-plugin/
+├── .trae-plugin/
 │   └── plugin.json                 # プラグインマニフェスト
 ├── skills/
 │   └── harness/
@@ -124,7 +124,7 @@ Harnessが生成するファイル：
 
 ```
 your-project/
-├── .claude/
+├── .trae/
 │   ├── agents/          # エージェント定義ファイル
 │   │   ├── analyst.md
 │   │   ├── builder.md
@@ -219,7 +219,7 @@ A/B test plans with iterative quality review.
 
 ## 要件
 
-- [Agent Teams機能の有効化](https://code.claude.com/docs/en/agent-teams)：`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`
+- [Agent Teams機能の有効化](https://code.trae.com/docs/en/agent-teams)：`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`
 
 ## ライセンス
 

@@ -8,7 +8,7 @@ description: "Configures a harness. A meta-skill that defines specialist agents 
 A meta-skill that configures a harness for a domain/project, defines each agent's role, and creates the skills those agents will use.
 
 **Core Principles:**
-1. Create agent definitions (`.claude/agents/`) and skills (`.claude/skills/`).
+1. Create agent definitions (`.trae/agents/`) and skills (`.trae/skills/`).
 2. **Use an agent team as the default execution mode.**
 3. **Register a harness pointer in `CLAUDE.md`.** - Record only the minimal pointer information needed to trigger the orchestrator skill in a new session (trigger rules + change history).
 4. **A harness is not a fixed artifact but an evolving system.** - Reflect feedback after every run and continuously update agents, skills, and `CLAUDE.md`.
@@ -19,7 +19,7 @@ A meta-skill that configures a harness for a domain/project, defines each agent'
 
 When the harness skill is triggered, first inspect the current state of any existing harness.
 
-1. Read `project/.claude/agents/`, `project/.claude/skills/`, and `project/CLAUDE.md`
+1. Read `project/.trae/agents/`, `project/.trae/skills/`, and `project/CLAUDE.md`
 2. Branch the execution mode based on the current state:
    - **New build**: The agent/skill directories do not exist or are empty -> run the full flow starting from Phase 1
    - **Existing expansion**: A harness already exists and the request is to add new agents/skills -> run only the required phases based on the phase-selection matrix below
@@ -77,7 +77,7 @@ Judge along four axes: specialization, parallelism, context, and reusability. Fo
 
 ### Phase 3: Create Agent Definitions
 
-**Every agent must be defined in a `project/.claude/agents/{name}.md` file.** Do not inject the role directly into the Agent tool prompt without an agent definition file. Reasons:
+**Every agent must be defined in a `project/.trae/agents/{name}.md` file.** Do not inject the role directly into the Agent tool prompt without an agent definition file. Reasons:
 - The agent definition must exist as a file so it can be reused in future sessions
 - The team communication protocol must be explicit to ensure collaboration quality between agents
 - A core value of the harness is separating the agent ("who") from the skill ("how")
@@ -88,7 +88,7 @@ Create an agent definition file even when using built-in types (`general-purpose
 
 **Team reconfiguration:** Only one agent team can be active per session, but you may dissolve the team between phases and create a new one. If a pattern like a pipeline requires a different specialist combination for each phase, save the previous team's outputs to files, tear the team down, and create a new team.
 
-Define each agent in `project/.claude/agents/{name}.md`. Required sections: core role, working principles, input/output protocol, error handling, and collaboration. In agent-team mode, add a `## Team Communication Protocol` section that specifies message senders/receivers and the scope of task requests.
+Define each agent in `project/.trae/agents/{name}.md`. Required sections: core role, working principles, input/output protocol, error handling, and collaboration. In agent-team mode, add a `## Team Communication Protocol` section that specifies message senders/receivers and the scope of task requests.
 
 > For the definition template and full real-file examples, see "Agent Definition Structure" in `references/agent-design-patterns.md` and `references/team-examples.md`.
 
@@ -100,7 +100,7 @@ Define each agent in `project/.claude/agents/{name}.md`. Required sections: core
 
 ### Phase 4: Create Skills
 
-Create the skills each agent will use in `project/.claude/skills/{name}/SKILL.md`. For detailed authoring guidance, see `references/skill-writing-guide.md`.
+Create the skills each agent will use in `project/.trae/skills/{name}/SKILL.md`. For detailed authoring guidance, see `references/skill-writing-guide.md`.
 
 #### 4-1. Skill Structure
 
@@ -262,7 +262,7 @@ After configuring the harness, register a minimal pointer in the project's `CLAU
 | {YYYY-MM-DD} | Initial setup | Entire harness | - |
 ````
 
-**What not to put in `CLAUDE.md`:** the agent list, skill list, directory structure, or detailed execution rules. Reasons: the agent/skill inventory is already managed by the orchestrator skill and `.claude/agents/`, `.claude/skills/`, so duplicating it here is redundant. The directory structure can be inspected directly from the file system. `CLAUDE.md` should contain only the **pointer (trigger rules) + change history**.
+**What not to put in `CLAUDE.md`:** the agent list, skill list, directory structure, or detailed execution rules. Reasons: the agent/skill inventory is already managed by the orchestrator skill and `.trae/agents/`, `.trae/skills/`, so duplicating it here is redundant. The directory structure can be inspected directly from the file system. `CLAUDE.md` should contain only the **pointer (trigger rules) + change history**.
 
 #### 5-5. Support Follow-up Work
 
@@ -397,8 +397,8 @@ Do not wait only for an explicit request like "please modify the harness." Propo
 Systematically inspect, modify, and sync the existing harness. Follow this workflow when Phase 0 routes into the "Operations/Maintenance" branch.
 
 **Step 1: Audit the current state**
-- Compare the file list in `.claude/agents/` against the orchestrator skill's agent composition -> generate a mismatch list
-- Compare the directory list in `.claude/skills/` against the orchestrator skill's skill composition -> generate a mismatch list
+- Compare the file list in `.trae/agents/` against the orchestrator skill's agent composition -> generate a mismatch list
+- Compare the directory list in `.trae/skills/` against the orchestrator skill's skill composition -> generate a mismatch list
 - Report the audit results to the user
 
 **Step 2: Incremental additions/modifications**
@@ -418,12 +418,12 @@ Systematically inspect, modify, and sync the existing harness. Follow this workf
 
 After generation is complete, verify:
 
-- [ ] `project/.claude/agents/` - **agent definition files are created** (required even for built-in types)
-- [ ] `project/.claude/skills/` - skill files (`SKILL.md` + `references/`)
+- [ ] `project/.trae/agents/` - **agent definition files are created** (required even for built-in types)
+- [ ] `project/.trae/skills/` - skill files (`SKILL.md` + `references/`)
 - [ ] One orchestrator skill (including data flow + error handling + test scenarios)
 - [ ] Execution mode is explicitly stated (choose one of agent team / sub-agent / hybrid; if hybrid, list the mode by phase)
 - [ ] Every Agent call explicitly includes `model: "opus"`
-- [ ] `.claude/commands/` - nothing is created
+- [ ] `.trae/commands/` - nothing is created
 - [ ] No conflicts with existing agents/skills
 - [ ] Skill descriptions are written aggressively ("pushy") - **including follow-up-work keywords**
 - [ ] `SKILL.md` body stays within 500 lines; if it exceeds that, details are split into `references/`

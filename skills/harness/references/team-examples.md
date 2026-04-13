@@ -8,7 +8,7 @@
 ### Execution Mode: Agent Team
 
 ```
-[리더/오케스트레이터]
+[Leader/Orchestrator]
     ├── TeamCreate(research-team)
     ├── TaskCreate(4 research tasks)
     ├── Members self-coordinate (SendMessage)
@@ -24,16 +24,16 @@
 | media-researcher | general-purpose | Media/investment | research_media.md |
 | community-researcher | general-purpose | Community/social media | research_community.md |
 | background-researcher | general-purpose | Background/competition/academic | research_background.md |
-| (Leader = Orchestrator) | — | Consolidated report | 종합보고서.md |
+| (Leader = Orchestrator) | — | Consolidated report | consolidated_report.md |
 
-> Research agents use the built-in `general-purpose` type, but must be defined in `.claude/agents/{name}.md` files. Each file should specify the role, research scope, and team communication protocol to ensure reusability and collaboration quality.
+> Research agents use the built-in `general-purpose` type, but must be defined in `.trae/agents/{name}.md` files. Each file should specify the role, research scope, and team communication protocol to ensure reusability and collaboration quality.
 
 ### Orchestrator Workflow (Agent Team)
 
 ```
 Phase 1: Preparation
   - Analyze user input (identify topic and research mode)
-  - _workspace/ 생성
+  - Create _workspace/
 
 Phase 2: Team Setup
   - TeamCreate(team_name: "research-team", members: [
@@ -314,13 +314,13 @@ Difference from fan-out: work is not fixed in advance, but **assigned dynamicall
 ## Deliverable Pattern Summary
 
 ### Agent Definition File
-Location: `프로젝트/.claude/agents/{agent-name}.md`
+Location: `project/.trae/agents/{agent-name}.md`
 Required sections: Core responsibilities, working principles, input/output protocol, error handling, collaboration
 Additional section for team mode: **Team communication protocol** (message receive/send, task request scope)
 
 ### Skill File Structure
-Location: `프로젝트/.claude/skills/{skill-name}/SKILL.md` (project level)
-Or: `~/.claude/skills/{skill-name}/SKILL.md` (global level)
+Location: `project/.trae/skills/{skill-name}/SKILL.md` (project level)
+Or: `~/.trae/skills/{skill-name}/SKILL.md` (global level)
 
 ### Integrated Skill (Orchestrator)
 A higher-level skill that coordinates the entire team. Defines agent composition and workflows for each scenario.

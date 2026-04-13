@@ -196,19 +196,19 @@ When invoking an agent, specify its type with the `subagent_type` parameter of t
 
 ### Custom Types
 
-If you define an agent in `.claude/agents/{name}.md`, you can invoke it with `subagent_type: "{name}"`. Custom agents can access the full toolset.
+If you define an agent in `.trae/agents/{name}.md`, you can invoke it with `subagent_type: "{name}"`. Custom agents can access the full toolset.
 
 ### Selection Criteria
 
 | Situation | Recommendation | Reason |
 |------|------|------|
-| The role is complex and reused across sessions | **Custom type** (`.claude/agents/`) | Manage persona and working principles in a file |
+| The role is complex and reused across sessions | **Custom type** (`.trae/agents/`) | Manage persona and working principles in a file |
 | The work is simple research/collection and a prompt is enough | **`general-purpose`** + detailed prompt | No agent file needed; instructions can live in the prompt |
 | Only code reading is needed (analysis/review) | **`Explore`** | Prevents accidental file edits |
 | Only design/planning is needed | **`Plan`** | Keeps focus on analysis and prevents code changes |
 | Implementation work requires file edits | **Custom type** | Full tool access + specialized instructions |
 
-**Principle:** Define every agent in a `.claude/agents/{name}.md` file. Even for built-in types, create an agent definition file that documents the role, principles, and protocol. The file is required for reuse in future sessions, and team communication quality depends on explicitly defined communication protocols.
+**Principle:** Define every agent in a `.trae/agents/{name}.md` file. Even for built-in types, create an agent definition file that documents the role, principles, and protocol. The file is required for reuse in future sessions, and team communication quality depends on explicitly defined communication protocols.
 
 **Model:** All agents use `model: "opus"`. When calling the `Agent` tool, always specify the `model: "opus"` parameter.
 
@@ -264,7 +264,7 @@ You are an expert [role] in [domain].
 | Category | Skill | Agent |
 |------|-------------|-----------------|
 | Definition | Procedural knowledge + tool bundle | Expert persona + behavioral principles |
-| Location | `.claude/skills/` | `.claude/agents/` |
+| Location | `.trae/skills/` | `.trae/agents/` |
 | Trigger | Keyword match against user requests | Explicit invocation with the `Agent` tool |
 | Size | Small to large (workflow) | Small (role definition) |
 | Purpose | "How it is done" | "Who does it" |
