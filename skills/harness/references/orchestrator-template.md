@@ -1,290 +1,220 @@
-# Orchestrator Skill Template
+# Orchestrator Skill Template for TRAE
 
-An orchestrator is a higher-level skill that coordinates the entire team. It provides three templates by execution mode:
+An orchestrator is a skill loaded by SOLO Coder that defines the overall delegation workflow: which agents to invoke, in what order, and how files pass between them.
 
-- **Template A: Agent Team Mode (Default)** — the first choice whenever two or more agents collaborate
-- **Template B: Sub-Agent Mode (Alternative)** — for cases where team communication is unnecessary
-- **Template C: Hybrid Mode** — mixes modes across phases
+**TRAE execution model reminder:**
+- SOLO Coder is the sole coordinator; agents cannot communicate with each other
+- All inter-agent data flows through files in `_workspace/`
+- Agents run sequentially (no parallel invocation)
+- No `TeamCreate`, `SendMessage`, or `TaskCreate` — use file writes and SOLO Coder decisions instead
 
 ---
 
-## Template A: Agent Team Mode (Default, First Choice)
-
-The **default mode to consider first** when two or more agents collaborate. Build the team with `TeamCreate`, then coordinate through a shared task list and `SendMessage`.
+## Orchestrator Template
 
 ```markdown
 ---
 name: {domain}-orchestrator
-description: "An orchestrator coordinating the {domain} agent team. {initial execution keywords}. Follow-up work: always use this skill for revising {domain} results, partial reruns, updates, refinements, reruns, and requests to improve previous results as well."
+description: "Coordinates the {domain} workflow. Use this skill whenever {initial trigger keywords — e.g., 'build the {domain} pipeline', 'run {domain} analysis'}. Also use for follow-up work: rerun, update, revise, improve, redo only the {part} of {domain}, based on previous result."
 ---
 
 # {Domain} Orchestrator
 
-An integrated skill that coordinates the {domain} agent team to produce the {final artifact}.
+Coordinates the {domain} agent pipeline via SOLO Coder delegation.
 
-## Execution Mode: Agent Team
+## Agent Roster
 
-## Agent Setup
-
-| Teammate | Agent Type | Role | Skill | Output |
-|------|-------------|------|------|------|
-| {teammate-1} | {custom or built-in} | {role} | {skill} | {output-file} |
-| {teammate-2} | {custom or built-in} | {role} | {skill} | {output-file} |
+| Agent | File | Role | Input | Output |
+|-------|------|------|-------|--------|
+| {agent-1} | `.trae/agents/{agent-1}.md` | {role} | `_workspace/00_input/` | `_workspace/01_{agent-1}_{artifact}.md` |
+| {agent-2} | `.trae/agents/{agent-2}.md` | {role} | `_workspace/01_{agent-1}_{artifact}.md` | `_workspace/02_{agent-2}_{artifact}.md` |
 | ... | | | | |
 
 ## Workflow
 
-### Phase 0: Context Check (Supports Follow-Up Work)
+### Phase 0: Context Check
 
 Determine the execution mode by checking whether prior artifacts already exist:
 
-1. Check whether the `_workspace/` directory exists
+1. Check whether `_workspace/` exists in the working directory
 2. Decide the execution mode:
-   - **`_workspace/` does not exist** -> initial run. Proceed to Phase 1
-   - **`_workspace/` exists + the user requests a partial revision** -> partial rerun. Reinvoke only the relevant agent and overwrite only the target portion of the existing artifacts
-   - **`_workspace/` exists + new input is provided** -> new run. Move the existing `_workspace/` to `_workspace_{YYYYMMDD_HHMMSS}/`, then proceed to Phase 1
-3. For a partial rerun: include the previous artifact paths in the agent prompt so the agent reads the existing results and incorporates the feedback
+   - **`_workspace/` does not exist** → initial run. Proceed to Phase 1
+   - **`_workspace/` exists + user requests a partial revision** → partial rerun. Re-invoke only the relevant agent; overwrite only the target files
+   - **`_workspace/` exists + new input is provided** → new run. Rename existing `_workspace/` to `_workspace_{YYYYMMDD_HHMMSS}/`, then proceed to Phase 1
+3. For a partial rerun: tell the agent the prior output file path so it reads existing results and applies the feedback
 
 ### Phase 1: Preparation
+
 1. Analyze the user input — {what to identify}
-2. Create `_workspace/` in the working directory (for the initial run)
+2. Create `_workspace/` and `_workspace/00_input/` (initial run only)
 3. Save input data to `_workspace/00_input/`
 
-### Phase 2: Team Assembly
+### Phase 2: {First Agent's Work — e.g., Analysis}
 
-1. Create the team:
-   ```
-   TeamCreate(
-     team_name: "{domain}-team",
-     members: [
-       { name: "{teammate-1}", agent_type: "{type}", model: "opus", prompt: "{role description and task instructions}" },
-       { name: "{teammate-2}", agent_type: "{type}", model: "opus", prompt: "{role description and task instructions}" },
-       ...
-     ]
-   )
-   ```
+Delegate to {agent-1}:
+- Tell {agent-1} to read `_workspace/00_input/` and write results to `_workspace/01_{agent-1}_{artifact}.md`
+- After {agent-1} completes, read `_workspace/01_{agent-1}_{artifact}.md` and confirm it is well-formed
 
-2. Register tasks:
-   ```
-   TaskCreate(tasks: [
-     { title: "{task1}", description: "{details}", assignee: "{teammate-1}" },
-     { title: "{task2}", description: "{details}", assignee: "{teammate-2}" },
-     { title: "{task3}", description: "{details}", depends_on: ["{task1}"] },
-     ...
-   ])
-   ```
+### Phase 3: {Second Agent's Work — e.g., Design / Generation}
 
-   > About 5-6 tasks per teammate is a reasonable target. Mark dependent tasks explicitly with `depends_on`.
+Delegate to {agent-2}:
+- Tell {agent-2} to read `_workspace/01_{agent-1}_{artifact}.md` as its primary input
+- {agent-2} writes results to `_workspace/02_{agent-2}_{artifact}.md`
+- After completion, read the output and verify quality
 
-### Phase 3: {Primary Work - for example: research/generation/analysis}
+### Phase N: {Final Integration}
 
-**Execution Style:** teammates self-coordinate
+1. Read all `_workspace/{phase}_*.md` artifacts
+2. Apply integration logic — {how to synthesize}
+3. Write final output to `{output-path}/{filename}`
 
-Teammates claim tasks from the shared task list and execute them independently.
-The leader monitors progress and intervenes when needed.
+### Phase N+1: Cleanup and Report
 
-**Inter-Teammate Communication Rules:**
-- {teammate-1} sends {what information} to {teammate-2} via SendMessage
-- {teammate-2} saves the result to a file when the task is complete and notifies the leader
-- If a teammate needs another teammate's result, request it via SendMessage
+1. Preserve `_workspace/` (do not delete — needed for partial reruns and audit trails)
+2. Report a summary to the user:
+   - What was produced
+   - Any agents that produced partial results or errors (and what was skipped)
+   - Path to the final output
 
-**Artifact Storage:**
-
-| Teammate | Output Path |
-|------|----------|
-| {teammate-1} | `_workspace/{phase}_{teammate-1}_{artifact}.md` |
-| {teammate-2} | `_workspace/{phase}_{teammate-2}_{artifact}.md` |
-
-**Leader Monitoring:**
-- Receive an automatic alert when a teammate becomes idle
-- If a specific teammate is blocked, issue guidance or reassign work via SendMessage
-- Check overall progress with TaskGet
-
-### Phase 4: {Follow-Up Work - for example: validation/integration}
-1. Wait for all teammates to complete their work (check status with TaskGet)
-2. Gather each teammate's artifacts with Read
-3. {integration/validation logic}
-4. Generate the final artifact: `{output-path}/{filename}`
-
-### Phase 5: Cleanup
-1. Ask teammates to stop (SendMessage)
-2. Tear down the team (TeamDelete)
-3. Preserve the `_workspace/` directory (do not delete intermediate artifacts, for post-run verification and audit trails)
-4. Report a summary of the results to the user
-
-> **If team reconfiguration is needed:** when different expert combinations are required by phase, tear down the current team with TeamDelete, then build the next phase's team with a new TeamCreate. The previous team's artifacts remain in `_workspace/`, so the new team can access them with Read.
-
-## Data Flow
+## File Handoff Map
 
 ```
-[leader] → TeamCreate → [teammate-1] ←SendMessage→ [teammate-2]
-                          │                           │
-                          ↓                           ↓
-                    artifact-1.md              artifact-2.md
-                          │                           │
-                          └───────── Read ────────────┘
-                                     ↓
-                             [leader: integration]
-                                     ↓
-                             final artifact
+_workspace/
+├── 00_input/           ← user input saved here
+├── 01_{agent-1}_{artifact}.md   ← output of Phase 2
+├── 02_{agent-2}_{artifact}.md   ← output of Phase 3
+└── ...
 ```
 
 ## Error Handling
 
 | Situation | Strategy |
-|------|------|
-| One teammate fails/stops | Leader detects it -> checks status via SendMessage -> restarts or creates a replacement teammate |
-| Majority of teammates fail | Notify the user and confirm whether to proceed |
-| Timeout | Use the partial results collected so far and terminate incomplete teammates |
-| Data conflicts between teammates | Preserve both versions with sources identified; do not delete either |
-| Task status is delayed | Leader checks with TaskGet, then manually updates with TaskUpdate |
+|-----------|----------|
+| Agent produces no output file | Retry once with additional context. If it fails again, skip and note omission in report |
+| Agent output is malformed / incomplete | Retry once. On second failure, use partial result with a note |
+| Input file missing for an agent | Check whether prior phase completed. Re-run prior phase if needed |
+| All agents in a phase fail | Notify the user and confirm whether to proceed |
 
 ## Test Scenarios
 
 ### Happy Path
-1. The user provides {input}
-2. Phase 1 derives {analysis result}
-3. Phase 2 assembles the team ({N} teammates + {M} tasks)
-4. In Phase 3, teammates self-coordinate and perform the work
-5. In Phase 4, artifacts are integrated into the final result
-6. In Phase 5, the team is cleaned up
-7. Expected result: `{output-path}/{filename}` is created
+1. User provides {input}
+2. Phase 1 prepares {what}
+3. {agent-1} produces `01_...md`
+4. {agent-2} produces `02_...md`
+5. Final output created at `{output-path}`
 
 ### Error Path
-1. In Phase 3, {teammate-2} stops due to an error
-2. The leader receives an idle alert
-3. The leader checks status via SendMessage -> attempts a restart
-4. If the restart fails, reassign {teammate-2}'s work to {teammate-1}
-5. Proceed to Phase 4 with the remaining results
-6. State in the final report that "{teammate-2} section was only partially collected"
+1. {agent-2} produces no output
+2. SOLO Coder retries once with additional context
+3. On second failure, SOLO Coder continues with Phase N using {agent-1}'s output alone
+4. Final report notes: "{agent-2} section was skipped due to failure"
 ```
 
 ---
 
-## Template B: Sub-Agent Mode (Alternative)
+## Orchestrator Authoring Principles
 
-Use this when team communication overhead is unnecessary. Invoke agents directly with the `Agent` tool and collect results from the return values.
+1. **State the file handoff map explicitly** — every agent must know exactly which file to read and exactly where to write. Ambiguous paths cause silent failures.
+
+2. **Phase 0 context check is mandatory** — without it, the orchestrator cannot support partial reruns or follow-up work, effectively becoming dead code after the first run.
+
+3. **Include follow-up keywords in the description** — initial trigger keywords alone are not enough. The description must also include phrases like "rerun", "update", "revise", "improve", "redo only the {part}", "based on the previous result". Without these, the harness will not activate for follow-up requests.
+
+4. **Verify each agent's output before proceeding** — after delegating to an agent, SOLO Coder should read the output file and confirm it is well-formed before moving to the next phase. Do not assume success.
+
+5. **Error handling must be realistic** — specify what SOLO Coder does when an agent fails, not just when everything succeeds. At minimum: retry once, then continue with partial results.
+
+6. **Keep orchestrator logic at the coordination level** — the orchestrator defines sequencing and file routing. Domain-specific logic belongs in the agent definition or its skill.
+
+7. **Test scenarios are required** — at least one happy path and one error path.
+
+---
+
+## Fan-out/Fan-in Orchestrator Example
+
+When multiple agents work on the same input independently (e.g., code review from different angles):
 
 ```markdown
----
-name: {domain}-orchestrator
-description: "{domain} orchestrator coordinating agents. {initial execution keywords}. Includes follow-up task keywords."
----
+### Phase 2: Fan-out — Parallel Reviews (sequential in TRAE)
 
-## Execution Mode: Sub-Agent
+Delegate to each reviewer in sequence. Each reviewer reads the same input and writes an independent report:
 
-## Agent Setup
+**{reviewer-1}:**
+- Read `_workspace/00_input/code.{ext}`
+- Write findings to `_workspace/02_security_review.md`
 
-| Agent | subagent_type | Role | Skill | Output |
-|---------|--------------|------|------|------|
-| {agent-1} | {built-in or custom} | {role} | {skill} | {output-file} |
-| {agent-2} | ... | ... | ... | ... |
+**{reviewer-2}:**
+- Read `_workspace/00_input/code.{ext}`
+- Write findings to `_workspace/02_performance_review.md`
 
-## Workflow
+**{reviewer-3}:**
+- Read `_workspace/00_input/code.{ext}`
+- Write findings to `_workspace/02_test_coverage_review.md`
 
-### Phase 0: Context Check
-(Same as Template A - branch on whether `_workspace/` exists)
+### Phase 3: Fan-in — Integration
 
-### Phase 1: Preparation
-1. Analyze the input
-2. Create `_workspace/` (for the initial run)
+Read all three review files and produce an integrated report:
+- `_workspace/02_security_review.md`
+- `_workspace/02_performance_review.md`
+- `_workspace/02_test_coverage_review.md`
 
-### Phase 2: Parallel Execution
-Invoke N Agent tools concurrently in a single message:
-
-| Agent | Input | Output | model | run_in_background |
-|---------|------|------|-------|-------------------|
-| {agent-1} | {source} | `_workspace/{phase}_{agent}_{artifact}.md` | opus | true |
-| {agent-2} | {source} | `_workspace/{phase}_{agent}_{artifact}.md` | opus | true |
-
-### Phase 3: Integration
-1. Collect the return value from each agent
-2. Gather file-based artifacts with Read
-3. Apply the integration logic -> final artifact
-
-### Phase 4: Cleanup
-1. Preserve `_workspace/`
-2. Report a summary of the results
-
-## Error Handling
-- One agent fails: retry once. If it fails again, note the omission and continue
-- Majority failure: notify the user and confirm whether to proceed
-- Timeout: use the partial results collected so far
+Merge into `_workspace/03_integrated_review.md`, then write final output.
 ```
 
 ---
 
-## Template C: Hybrid Mode
-
-Use a different execution mode for each phase. At the top of each phase, specify `**Execution Mode:** {team | sub}`.
+## Generate-Validate Orchestrator Example
 
 ```markdown
----
-name: {domain}-orchestrator
-description: "{domain} orchestrator (hybrid). {keywords}. Includes follow-up task keywords."
----
+### Phase 2: Generation
 
-## Execution Mode: Hybrid
+Delegate to {generator-agent}:
+- Read `_workspace/00_input/requirements.md`
+- Write draft to `_workspace/02_draft.md`
 
-| Phase | Mode | Reason |
-|-------|------|------|
-| Phase 2 (parallel collection) | Sub-agent | Independent data collection, no team communication needed |
-| Phase 3 (consensus integration) | Agent team | Conflicting data requires discussion and consensus |
-| Phase 4 (independent validation) | Sub-agent | One QA agent performs an objective validation |
+### Phase 3: Validation
 
-## Workflow
+Delegate to {validator-agent}:
+- Read `_workspace/02_draft.md`
+- Write validation report to `_workspace/03_review.md`
+- Include: list of issues found, severity (critical / minor), specific suggestions
 
-### Phase 2: Parallel Data Collection
-**Execution Mode:** Sub-agent
+### Phase 4: Revision Loop (max 2 iterations)
 
-Call N agents in parallel with the Agent tool in a single message (`run_in_background: true`).
-Save each result to `_workspace/02_{agent}_raw.md`.
-
-### Phase 3: Consensus-Based Integration
-**Execution Mode:** Agent team
-
-1. Use `TeamCreate` to assemble the integration team (editor + fact-checker + synthesizer)
-2. Use `TaskCreate` to distribute tasks - all teammates Read the Phase 2 `_workspace/02_*` files
-3. Teammates discuss conflicting data through `SendMessage` and produce a file-based consensus
-4. Generate the final integrated file `_workspace/03_integrated.md`
-5. Clean up the team with `TeamDelete`
-
-### Phase 4: Independent Validation
-**Execution Mode:** Sub-agent
-
-A single QA sub-agent takes `_workspace/03_integrated.md` as input and generates a validation report.
+Read `_workspace/03_review.md`:
+- IF no critical issues → proceed to final output
+- IF critical issues found → re-invoke {generator-agent} with both `_workspace/02_draft.md` and `_workspace/03_review.md` as input; overwrite `_workspace/02_draft.md`; re-run Phase 3
+- IF 2 iterations complete and issues remain → produce output with known issues noted
 ```
 
-**Hybrid Transition Rules:**
-- Team -> Sub: always tear down the team with `TeamDelete` before calling the Agent tool
-- Sub -> Team: pass sub-agent file artifacts to teammates as Read paths
-- Team -> Team: clean up the previous team, then create a new one with `TeamCreate` (only one active team per session)
-
 ---
 
-## Authoring Principles
+## Supervisor Orchestrator Example
 
-1. **State the execution mode first** — at the top of the orchestrator, specify one of "Agent Team" / "Sub-Agent" / "Hybrid". If it is hybrid, a per-phase mode table is required
-2. **For team mode, be explicit about TeamCreate/SendMessage/TaskCreate usage** — team setup, task registration, and communication rules
-3. **For sub mode, fully specify Agent tool parameters** — name, subagent_type, prompt, run_in_background, model
-4. **Use absolute file paths** — no relative paths; make every path explicit relative to `_workspace/`
-5. **State dependencies across phases** — clarify which phase depends on which prior outputs. In hybrid mode, emphasize mode transition points in particular
-6. **Make error handling realistic** — do not assume "everything succeeds"
-7. **Test scenarios are required** — at least one happy path and one error path
+```markdown
+### Phase 1: Task Planning
 
-## Follow-Up Keywords for `description`
+SOLO Coder analyzes the work scope and creates `_workspace/tasks.md`:
 
-An orchestrator `description` is not sufficient if it only includes initial execution keywords. It must also include the following follow-up expressions:
+```markdown
+# Task List
+- [ ] Task 1: {description} → assigned to {agent-a}
+- [ ] Task 2: {description} → assigned to {agent-b}
+- [ ] Task 3: {description} → assigned to {agent-a}
+...
+```
 
-- rerun / run again / update / revise / refine
-- "redo only the {part} of {domain}"
-- "based on the previous result", "improve the result"
-- everyday requests related to the domain (for example, if it is a launch strategy harness: "launch", "promotion", "trending", etc.)
+### Phase 2–N: Dynamic Assignment
 
-Without follow-up keywords, the harness effectively becomes dead code after the first run.
+For each pending task in `_workspace/tasks.md`:
+1. Identify the next incomplete task
+2. Delegate to the assigned agent, passing the task description and any dependency files
+3. Agent writes output to `_workspace/{task-id}_{agent}_{artifact}.md`
+4. Update `_workspace/tasks.md`: mark task as complete
+5. Repeat until all tasks are done
 
-## Real Orchestrator Reference
+### Final Phase: Integration
 
-The basic structure of a fan-out/fan-in orchestrator:
-Preparation -> Phase 0 (context check) -> TeamCreate + TaskCreate -> parallel execution by N teammates -> Read + integration -> cleanup.
-See the research team example in `references/team-examples.md`.
+Read all task output files and synthesize the final result.
+```

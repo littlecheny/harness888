@@ -1,285 +1,232 @@
-# Agent Team Design Patterns
+# Agent Design Patterns for TRAE
 
-## Execution Modes: Agent Teams vs Sub-agents
+## TRAE Execution Model
 
-Understand the key differences between the two execution modes and choose the one that fits.
-
-### Agent Teams — Default Mode
-
-The team leader creates the team with `TeamCreate`, and team members run as independent Claude Code instances. Members communicate directly through `SendMessage` and coordinate themselves through a shared task list (`TaskCreate`/`TaskUpdate`).
+TRAE uses a **SOLO Coder → Custom Agent** delegation model. Before designing any harness, understand these constraints:
 
 ```
-[Leader] ←→ [Member A] ←→ [Member B]
-   ↕           ↕            ↕
-   └──── Shared Task List ────┘
+[SOLO Coder]
+    ↓ delegates task + passes file paths
+[Custom Agent A]
+    ↓ writes output file
+[SOLO Coder reads output]
+    ↓ delegates next task + passes file paths
+[Custom Agent B]
+    ...
 ```
 
-**Core tools:**
-- `TeamCreate`: create the team + spawn team members
-- `SendMessage({to: name})`: message a specific team member
-- `SendMessage({to: "all"})`: broadcast (expensive, use rarely)
-- `TaskCreate`/`TaskUpdate`: manage the shared task list
-
-**Characteristics:**
-- Team members can talk to, challenge, and verify one another directly
-- Information can move between members without passing through the leader
-- Self-coordination through the shared task list (including self-requested tasks)
-- When a member becomes idle, the leader is notified automatically
-- Plan approval mode can review risky work before execution
-
-**Constraints:**
-- Only one team can be **active** per session (however, you can dissolve a team between phases and create a new one)
-- No nested teams (a team member cannot create its own team)
-- Fixed leader (cannot be transferred)
-- High token cost
-
-**Team reconfiguration pattern:**
-If different phases require different combinations of specialists, proceed in this order: save the previous team's outputs to files -> clean up the team -> create a new team. The previous team's outputs are preserved in `_workspace/`, so the new team can access them with `Read`.
-
-### Sub-agents — Lightweight Mode
-
-The main agent creates sub-agents with the `Agent` tool. Sub-agents return results only to the main agent and do not communicate with one another.
-
-```
-[Main] → [Sub A] → Return result
-       → [Sub B] → Return result
-       → [Sub C] → Return result
-```
-
-**Core tools:**
-- `Agent(prompt, subagent_type, run_in_background)`: create a sub-agent
-
-**Characteristics:**
-- Lightweight and fast
-- Results are summarized back into the main context
-- Token-efficient
-
-**Constraints:**
-- No communication between sub-agents
-- The main agent handles all coordination
-- No real-time collaboration or challenge loop
-
-### Decision Tree For Mode Selection
-
-```
-Are there 2 or more agents?
-├── Yes → Do the agents need to communicate with each other?
-│         ├── Yes → Agent Teams (default)
-│         │         Cross-verification, shared discoveries, and real-time feedback improve quality.
-│         │
-│         └── No → Sub-agents are also possible
-│                  Suitable for producer-reviewer flows, expert pools, and similar cases where only result delivery is needed.
-│
-└── No (1) → Sub-agents
-             A single agent does not need a team structure.
-```
-
-> **Core principle:** Agent Teams are the default. When choosing sub-agents, ask yourself, "Is communication between team members truly unnecessary?"
+**Key rules:**
+- SOLO Coder is always the top-level controller — there is no team leader peer
+- Agents cannot message each other directly; all inter-agent data flows through files
+- Each agent runs in its own isolated context
+- There is no parallelism at the agent level — design for sequential phases
+- Model selection is configured in the TRAE UI, not in skill files
 
 ---
 
-## Agent Team Architecture Types
+## Architecture Patterns
+
+All patterns in TRAE use SOLO Coder as the central hub. Choose based on work structure:
 
 ### 1. Pipeline
-Sequential workflow. The output of one agent becomes the input of the next.
+
+Sequential workflow where each agent's output feeds the next.
 
 ```
-[Analysis] → [Design] → [Implementation] → [Validation]
+SOLO Coder
+    → Agent-A (writes 01_output.md)
+    → Agent-B reads 01_output.md, writes 02_output.md
+    → Agent-C reads 02_output.md, writes 03_output.md
+    → SOLO Coder collects 03_output.md → final result
 ```
 
-**Best for:** each stage depends heavily on the output of the previous stage
-**Example:** writing a novel — worldbuilding -> characters -> plot -> drafting -> editing
-**Caution:** bottlenecks delay the entire pipeline. Design each stage to be as independent as possible.
-**Team mode fit:** because sequential dependency is strong, the benefits of team mode are limited. Still, team mode is useful when the pipeline contains parallel sections.
+**Best for:** each stage depends directly on the prior stage's output
+**Example:** requirements analysis → design → implementation → QA
+**Caution:** bottlenecks delay the entire pipeline. Keep each agent's scope narrow.
 
 ### 2. Fan-out/Fan-in
-Parallel execution followed by result integration. Independent work is performed simultaneously.
+
+Multiple agents work on different aspects of the same input, then SOLO Coder integrates.
 
 ```
-         ┌→ [Expert A] ─┐
-[Dispatch] → ├→ [Expert B] ─┼→ [Integration]
-         └→ [Expert C] ─┘
+SOLO Coder
+    → Agent-A (writes 01_a_output.md)     [sequential in TRAE]
+    → Agent-B (writes 01_b_output.md)
+    → Agent-C (writes 01_c_output.md)
+    → SOLO Coder reads all three, integrates → final result
 ```
 
-**Best for:** analyzing the same input from different perspectives or domains
-**Example:** comprehensive research — investigate official sources, media, community discussions, and background material in parallel -> integrated report
-**Caution:** the quality of the integration step determines the overall quality.
-**Team mode fit:** this is the most natural pattern for Agent Teams. **It should be implemented as an Agent Team.** Team members can share discoveries and challenge one another, and one agent's finding can redirect another agent's investigation in real time, greatly improving quality compared with isolated research.
+**Best for:** analyzing input from independent angles or domains
+**Example:** code review — security, performance, and test coverage reviewers each produce independent reports; SOLO Coder merges them
+**Note:** In TRAE, "parallel" agents actually run sequentially. Design agents so each one produces a standalone artifact. SOLO Coder integrates all artifacts at the end.
 
 ### 3. Expert Pool
-Select and invoke the right specialist depending on the situation.
+
+SOLO Coder selects one specialist agent based on the input type, rather than invoking all.
 
 ```
-[Router] → { Expert A | Expert B | Expert C }
+SOLO Coder analyzes input type
+    → IF security issue → Agent-security
+    → IF performance issue → Agent-performance
+    → IF architecture issue → Agent-architecture
 ```
 
-**Best for:** different handling is needed depending on the input type
-**Example:** code review — invoke only the relevant specialist among security, performance, and architecture experts
-**Caution:** the router's classification accuracy is critical.
-**Team mode fit:** sub-agents are a better fit. Since you call only the specialists you need, a standing team is unnecessary.
+**Best for:** routing to different experts based on request classification
+**Example:** customer inquiry handling — SOLO Coder classifies the topic and delegates to the appropriate specialist
+**Key design:** SOLO Coder's routing logic should be part of the orchestrator skill
 
-### 4. Producer-Reviewer
-A producer agent and a reviewer agent work as a pair.
+### 4. Generate-Validate
+
+One agent generates, another reviews. Loop if needed.
 
 ```
-[Producer] → [Review] → (if issues) → rerun [Producer]
+SOLO Coder
+    → Generator (writes draft.md)
+    → Validator reads draft.md, writes review.md
+    → SOLO Coder checks review.md
+        → IF issues found: re-invoke Generator with review.md as feedback input
+        → IF approved: finalize
 ```
 
-**Best for:** output quality assurance is important and objective review criteria exist
-**Example:** webtoon production — artist creates -> reviewer checks -> problematic panels are regenerated
-**Caution:** to prevent infinite loops, you must set a maximum retry count (2-3 attempts).
-**Team mode fit:** Agent Teams are useful here. `SendMessage` enables real-time feedback between producer and reviewer.
+**Best for:** output quality is critical and objective review criteria exist
+**Example:** content generation, code scaffolding, design review
+**Caution:** set a maximum retry count (2-3 rounds) to avoid infinite loops.
 
 ### 5. Supervisor
-A central agent manages work state and dynamically distributes tasks to subordinate agents.
+
+SOLO Coder acts as the supervisor — reads a task list, assigns work to agents dynamically based on progress.
 
 ```
-         ┌→ [Worker A]
-[Supervisor] ─┼→ [Worker B]    ← The supervisor observes state and assigns dynamically
-         └→ [Worker C]
+SOLO Coder creates _workspace/task-list.md
+    → Agent-A takes task batch 1, writes results
+    → SOLO Coder updates task-list.md, assigns batch 2 to Agent-B
+    → Agent-B takes batch 2, writes results
+    → ... until all tasks complete
 ```
 
-**Best for:** workload is variable or task allocation must be decided at runtime
-**Example:** large-scale code migration — the supervisor analyzes the file list and assigns batches to workers
-**Difference from fan-out:** fan-out distributes fixed tasks in advance, while a supervisor adjusts dynamically based on progress
-**Caution:** make delegation units large enough so the supervisor does not become a bottleneck.
-**Team mode fit:** the shared task list in Agent Teams maps naturally to the supervisor pattern. Register tasks with `TaskCreate`, and let team members request work themselves.
+**Best for:** variable workload, task count determined at runtime
+**Example:** large-scale migration — SOLO Coder reads file list, distributes batches across invocations
+**Implementation:** SOLO Coder maintains a shared task file (`_workspace/tasks.md`) as the assignment ledger
 
 ### 6. Hierarchical Delegation
-A higher-level agent recursively delegates to lower-level agents. Complex problems are broken down step by step.
+
+A lead agent plans and produces an instruction file; SOLO Coder passes that file to sub-agents.
 
 ```
-[Lead] → [Manager A] → [Contributor A1]
-                     → [Contributor A2]
-       → [Manager B] → [Contributor B1]
+SOLO Coder
+    → Lead-Agent reads project, writes _workspace/01_plan.md (with per-module instructions)
+    → SOLO Coder reads 01_plan.md, extracts Module-A instructions
+    → Sub-Agent-A reads instructions + module files, writes _workspace/02_module_a.md
+    → Sub-Agent-B reads instructions + module files, writes _workspace/02_module_b.md
+    → SOLO Coder integrates
 ```
 
-**Best for:** the problem naturally decomposes into a hierarchy
-**Example:** full-stack app development — overall lead -> frontend lead -> (UI/logic/tests) + backend lead -> (API/DB/tests)
-**Caution:** beyond 3 levels deep, delay and context loss increase significantly. Stay within 2 levels when possible.
-**Team mode fit:** Agent Teams cannot be nested (team members cannot create teams). Implement level 1 as a team and level 2 as sub-agents, or flatten the structure into a single team.
+**Best for:** complex problems that decompose into a planning phase and execution phases
+**Caution:** beyond 2 levels, context loss increases sharply. Keep to 2 levels (Lead → Sub).
+
+---
 
 ## Composite Patterns
 
-In practice, composite patterns are more common than single patterns:
+In practice, patterns are often combined:
 
-| Composite Pattern | Composition | Example |
-|----------|------|------|
-| **Fan-out + Producer-Reviewer** | Generate in parallel, then review each result | Multilingual translation — translate into 4 languages in parallel -> each is reviewed by a native reviewer |
-| **Pipeline + Fan-out** | Parallelize selected stages within a sequential flow | Analysis (sequential) -> Implementation (parallel) -> Integration testing (sequential) |
-| **Supervisor + Expert Pool** | The supervisor dynamically invokes specialists | Customer inquiry handling — the supervisor classifies each inquiry and assigns the appropriate specialist |
+| Composite | Composition | Example |
+|-----------|-------------|---------|
+| **Pipeline + Generate-Validate** | Sequential stages, each with its own review loop | Spec writing → draft → review → refine |
+| **Fan-out + Pipeline** | Independent agents each run a mini-pipeline | Multi-language docs: each language agent runs its own generate → proofread pipeline |
+| **Supervisor + Expert Pool** | Supervisor routes batches to the right specialist | Multi-file migration with mixed file types |
 
-### Execution Modes For Composite Patterns
+---
 
-**By default, use Agent Teams for all composite patterns.** Active communication between team members is a key driver of output quality.
+## Agent Separation Criteria
 
-| Scenario | Recommended Mode | Reason |
-|---------|----------|------|
-| **Research + Analysis** | Agent Teams | Researchers share discoveries and discuss conflicting information in real time |
-| **Design + Implementation + Validation** | Agent Teams | Feedback loop between designer, implementer, and validator |
-| **Supervisor + Workers** | Agent Teams | Dynamic assignment through a shared task list, plus progress sharing among workers |
-| **Producer + Reviewer** | Agent Teams | Real-time feedback between producer and reviewer minimizes rework |
+| Criterion | Split into separate agent | Keep together |
+|-----------|--------------------------|---------------|
+| **Specialization** | Distinct knowledge domain or tool behavior needed | Domains overlap significantly |
+| **Context isolation** | Agent should NOT see prior unrelated work | Shared context improves quality |
+| **Output clarity** | Produces a clearly defined artifact consumed by another agent | Output is tightly coupled with orchestration logic |
+| **Reusability** | Same role appears in multiple harnesses | Only used in this one harness |
+| **Task size** | Enough focused work to justify a dedicated context | Too small; overhead outweighs benefit |
 
-> Consider mixing in sub-agents only when a single agent performs a completely isolated one-off task.
+**When to keep work in SOLO Coder directly:** simple single-step operations, logic tightly coupled with routing decisions, or tasks where the overhead of an agent invocation exceeds the value.
 
-## Agent Type Selection
-
-When invoking an agent, specify its type with the `subagent_type` parameter of the `Agent` tool. Team members in an Agent Team can also use custom agent definitions.
-
-### Built-in Types
-
-| Type | Tool Access | Best Use Cases |
-|------|----------|-----------|
-| `general-purpose` | Full access (including WebSearch and WebFetch) | Web research, general-purpose work |
-| `Explore` | Read-only (no Edit/Write) | Codebase exploration, analysis |
-| `Plan` | Read-only (no Edit/Write) | Architecture design, planning |
-
-### Custom Types
-
-If you define an agent in `.trae/agents/{name}.md`, you can invoke it with `subagent_type: "{name}"`. Custom agents can access the full toolset.
-
-### Selection Criteria
-
-| Situation | Recommendation | Reason |
-|------|------|------|
-| The role is complex and reused across sessions | **Custom type** (`.trae/agents/`) | Manage persona and working principles in a file |
-| The work is simple research/collection and a prompt is enough | **`general-purpose`** + detailed prompt | No agent file needed; instructions can live in the prompt |
-| Only code reading is needed (analysis/review) | **`Explore`** | Prevents accidental file edits |
-| Only design/planning is needed | **`Plan`** | Keeps focus on analysis and prevents code changes |
-| Implementation work requires file edits | **Custom type** | Full tool access + specialized instructions |
-
-**Principle:** Define every agent in a `.trae/agents/{name}.md` file. Even for built-in types, create an agent definition file that documents the role, principles, and protocol. The file is required for reuse in future sessions, and team communication quality depends on explicitly defined communication protocols.
-
-**Model:** All agents use `model: "opus"`. When calling the `Agent` tool, always specify the `model: "opus"` parameter.
+---
 
 ## Agent Definition Structure
 
+Agent definition files live in `.trae/agents/{name}.md`. This file is the agent's instructions when SOLO Coder invokes it. Since agents cannot communicate with each other, the Input/Output contract is critical.
+
 ```markdown
----
-name: agent-name
-description: "1-2 sentence role description. List trigger keywords."
----
+# {Agent Name}
 
-# Agent Name — one-line role summary
-
-You are an expert [role] in [domain].
-
-## Core Responsibilities
-1. Responsibility 1
-2. Responsibility 2
+## Role
+{One-sentence description of what this agent specializes in}
 
 ## Working Principles
-- Principle 1
-- Principle 2
+- {Principle 1}
+- {Principle 2}
 
-## Input/Output Protocol
-- Input: [what is received from where]
-- Output: [what is written where]
-- Format: [file format, structure]
+## Input Contract
+- Read `_workspace/{input-file}` for {description}
+- Read `_workspace/{other-file}` if it exists (optional: output from prior agent)
 
-## Team Communication Protocol (Agent Team Mode)
-- Message intake: [what messages are received from whom]
-- Message sending: [what messages are sent to whom]
-- Task requests: [what types of tasks are requested from the shared task list]
+## Output Contract
+- Write results to `_workspace/{output-file}` in {format: markdown / JSON}
+- Output structure: {describe fields or sections}
 
 ## Error Handling
-- [behavior on failure]
-- [behavior on timeout]
+- If input file is missing or malformed: write an error summary to `_workspace/{output-file}` and describe what was missing
+- Never halt silently — always produce an output file, even a partial one with a note
 
-## Collaboration
-- Relationship with other agents
+## If Prior Results Exist
+- If `_workspace/{output-file}` already exists, read it and incorporate improvements
+- If feedback is provided, revise only the affected portion
 ```
 
-## Criteria For Splitting Agents
+**What to include in the agent file:**
+- Role and domain expertise
+- Input/Output contracts with explicit file paths
+- Error handling behavior
+- Reinvocation behavior (what to do when prior artifacts exist)
 
-| Criterion | Split | Combine |
-|------|------|------|
-| Expertise | Split if domains differ | Combine if domains overlap |
-| Parallelism | Split if they can run independently | Consider combining if sequential dependency is strong |
-| Context | Split if context load is heavy | Combine if it is lightweight and fast |
-| Reusability | Split if it will be used in other teams too | Consider combining if it is only used in this team |
+**What NOT to include:**
+- Model parameters (configured in TRAE UI)
+- TeamCreate / SendMessage / TaskCreate references (not available in TRAE)
+- Instructions to "message another agent" — use file writes instead
+
+---
 
 ## Skills vs Agents
 
 | Category | Skill | Agent |
-|------|-------------|-----------------|
-| Definition | Procedural knowledge + tool bundle | Expert persona + behavioral principles |
+|----------|-------|-------|
+| Definition | Procedural knowledge + workflow guide | Expert persona + behavioral principles |
 | Location | `.trae/skills/` | `.trae/agents/` |
-| Trigger | Keyword match against user requests | Explicit invocation with the `Agent` tool |
-| Size | Small to large (workflow) | Small (role definition) |
+| Trigger | Keyword match against user requests | Explicit delegation by SOLO Coder |
 | Purpose | "How it is done" | "Who does it" |
 
-Skills are **procedural guides** that agents refer to while doing work.
-Agents are **expert role definitions** that make use of skills.
+Skills are **procedural guides** that agents follow while doing work.
+Agents are **expert role definitions** that execute using skills as their methodology.
 
-## Skill ↔ Agent Integration Methods
+## Skill ↔ Agent Integration
 
-Three ways agents can use skills:
+| Method | Implementation | Best For |
+|--------|----------------|----------|
+| **Skill reference in agent file** | Write "follow the methodology in `.trae/skills/{name}/SKILL.md`" in the agent's working principles | When the skill defines the core workflow the agent follows |
+| **Inline in prompt** | Include skill content directly in the agent definition | Short dedicated skills (50 lines or fewer) |
+| **Reference loading** | Agent reads `references/` files with Read when needed | Large skills only partially needed per invocation |
 
-| Method | Implementation | Best for |
-|------|------|-----------|
-| **Skill tool invocation** | Specify `Call /skill-name with the Skill tool` in the agent prompt | When the skill is an independent workflow and can be called by the user |
-| **Inline in prompt** | Include the skill content directly in the agent definition | When the skill is short (50 lines or fewer) and dedicated to this agent |
-| **Reference loading** | Load the skill's `references/` files with `Read` when needed | When the skill content is large and only conditionally needed |
+---
 
-Recommendation: use the Skill tool for highly reusable skills, inline for dedicated skills, and reference loading for large skills.
+## Decision Guide: How Many Agents?
+
+| Work Size | Recommended Agents | Rationale |
+|-----------|-------------------|-----------|
+| 3-5 tasks, single domain | 0-1 (SOLO Coder handles directly) | No delegation benefit |
+| 5-10 tasks, 2-3 domains | 2-3 agents | Each agent owns one clear deliverable |
+| 10+ tasks, 4+ domains | 4-6 agents | Specialist isolation improves quality |
+
+**Warning signs of over-splitting:**
+- An agent's input and output are nearly identical (no real transformation)
+- An agent has no unique expertise — it is just passing data through
+- Adding the agent increases orchestration complexity without improving output quality

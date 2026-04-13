@@ -101,14 +101,16 @@ Verification steps:
 
 ## 3. QA Agent Design Principles
 
-### 3-1. Use a general-purpose type, not Explore
+### 3-1. Enable Terminal and File System tools, not read-only access
 
-An `Explore`-type QA agent can only read. Effective QA requires:
+A QA agent configured with only read access cannot do effective QA. Effective QA requires:
 - Grepping for patterns (extract all `NextResponse.json()`)
 - Running scripts for automated cross-checks (API shape vs hook type)
 - Making edits when needed
 
-**Recommendation**: Configure as `general-purpose` and explicitly include a “verify → report → request fix” protocol in the agent definition.
+**Recommendation**: When creating the QA agent in TRAE, enable both **Terminal** and **File System** built-in tools (not read-only). Explicitly include a "verify → report → request fix" protocol in the agent's prompt/definition.
+
+<!-- FIXED: #5 -->
 
 ### 3-2. Prefer cross-checks over existence checks in checklists
 
